@@ -122,6 +122,17 @@ HTML 페이지의 경우, httpx로 가져온 결과가 50단어 미만이면 Jav
 
 이 소프트웨어는 어떠한 종류의 보증 없이 "있는 그대로" 제공됩니다. 전체 MIT 라이선스 텍스트는 [LICENSE](LICENSE) 파일을 참조하세요.
 
+## 감사의 말
+
+MarkGrab은 우수한 오픈소스 프로젝트와 확립된 기술에서 영감을 받았습니다:
+
+- **[puppeteer-extra-plugin-stealth](https://github.com/nicoleahmed/puppeteer-extra-plugin-stealth)** — webdriver 제거, 플러그인 모킹, WebGL 스푸핑 등 스텔스 회피 패턴의 원류. opt-in `anti_bot/stealth.py` 모듈에 영감을 줌
+- **[Mozilla Readability](https://github.com/mozilla/readability)** — 본문 영역 탐지 우선순위 (`article > main > body`) 및 링크 밀도 필터링 개념
+- **[Boilerpipe](https://github.com/kohlschutter/boilerpipe)** (Kohlschutter et al., 2010) — 보일러플레이트 제거를 위한 링크 밀도 비율 알고리즘의 학술적 원류
+- **[Jina Reader](https://github.com/jina-ai/reader)** — URL→마크다운 추출의 시장 수요를 검증. MarkGrab은 경량 자체 호스팅 대안을 지향
+
+사용 라이브러리: [httpx](https://github.com/encode/httpx), [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/), [markdownify](https://github.com/matthewwithanm/python-markdownify), [Playwright](https://github.com/microsoft/playwright-python), [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api), [pdfplumber](https://github.com/jsvine/pdfplumber), [python-docx](https://github.com/python-openxml/python-docx).
+
 ## 라이선스
 
 [MIT](LICENSE)

@@ -122,6 +122,17 @@ For HTML pages, if the initial httpx fetch yields fewer than 50 words, MarkGrab 
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. See the [LICENSE](LICENSE) file for the full MIT license text.
 
+## Acknowledgments
+
+MarkGrab builds on excellent open-source work and well-established techniques:
+
+- **[puppeteer-extra-plugin-stealth](https://github.com/nicoleahmed/puppeteer-extra-plugin-stealth)** — stealth evasion patterns (webdriver removal, plugin mocking, WebGL spoofing) that inspired the opt-in `anti_bot/stealth.py` module
+- **[Mozilla Readability](https://github.com/mozilla/readability)** — content area detection priority (`article > main > body`) and link density filtering concepts used in the density filter
+- **[Boilerpipe](https://github.com/kohlschutter/boilerpipe)** (Kohlschutter et al., 2010) — the academic origin of link density ratio algorithms for boilerplate removal
+- **[Jina Reader](https://github.com/jina-ai/reader)** — validated the market need for URL-to-markdown extraction; MarkGrab aims to be a lightweight, self-hosted alternative
+
+Built with [httpx](https://github.com/encode/httpx), [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/), [markdownify](https://github.com/matthewwithanm/python-markdownify), [Playwright](https://github.com/microsoft/playwright-python), [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api), [pdfplumber](https://github.com/jsvine/pdfplumber), and [python-docx](https://github.com/python-openxml/python-docx).
+
 ## License
 
 [MIT](LICENSE)
