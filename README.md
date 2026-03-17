@@ -1,5 +1,10 @@
 # MarkGrab
 
+[![PyPI](https://img.shields.io/pypi/v/markgrab)](https://pypi.org/project/markgrab/)
+[![Python](https://img.shields.io/pypi/pyversions/markgrab)](https://pypi.org/project/markgrab/)
+[![License](https://img.shields.io/github/license/QuartzUnit/markgrab)](https://github.com/QuartzUnit/markgrab/blob/main/LICENSE)
+[![Tests](https://img.shields.io/badge/tests-143%20passed-brightgreen)]()
+
 > [한국어 문서](README.ko.md)
 
 Universal web content extraction — any URL to LLM-ready markdown.

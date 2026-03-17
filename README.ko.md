@@ -1,5 +1,10 @@
 # MarkGrab
 
+[![PyPI](https://img.shields.io/pypi/v/markgrab)](https://pypi.org/project/markgrab/)
+[![Python](https://img.shields.io/pypi/pyversions/markgrab)](https://pypi.org/project/markgrab/)
+[![License](https://img.shields.io/github/license/QuartzUnit/markgrab)](https://github.com/QuartzUnit/markgrab/blob/main/LICENSE)
+[![Tests](https://img.shields.io/badge/tests-143%20passed-brightgreen)]()
+
 > [English](README.md)
 
 범용 웹 콘텐츠 추출 — 어떤 URL이든 LLM-ready 마크다운으로 변환합니다.
