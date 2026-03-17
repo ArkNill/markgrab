@@ -1,6 +1,6 @@
 [project]
 name = "markgrab"
-version = "0.1.1"
+version = "0.1.2"
 description = "Universal web content extraction — URL to LLM-ready markdown"
 requires-python = ">=3.12"
 license = "MIT"

@@ -136,3 +136,5 @@ Built with [httpx](https://github.com/encode/httpx), [BeautifulSoup](https://www
 ## License
 
 [MIT](LICENSE)
+
+<!-- mcp-name: io.github.ArkNill/markgrab -->
