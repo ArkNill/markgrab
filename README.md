@@ -138,6 +138,11 @@ MarkGrab builds on excellent open-source work and well-established techniques:
 
 Built with [httpx](https://github.com/encode/httpx), [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/), [markdownify](https://github.com/matthewwithanm/python-markdownify), [Playwright](https://github.com/microsoft/playwright-python), [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api), [pdfplumber](https://github.com/jsvine/pdfplumber), and [python-docx](https://github.com/python-openxml/python-docx).
 
+## Used in
+
+- [newswatch](https://github.com/QuartzUnit/newswatch) — RSS news monitoring pipeline (feedkit → markgrab → embgrep → diffgrab)
+- [watchdeck](https://github.com/QuartzUnit/watchdeck) — Web page monitoring with visual diffs and safety guards
+
 ## License
 
 [MIT](LICENSE)
