@@ -100,13 +100,21 @@ result.metadata     # extra metadata (video_id, page_count, etc.)
 
 ## How it works
 
-```
-markgrab.extract(url)
-    1. Detect content type (URL pattern)
-    2. Fetch content (httpx first, Playwright fallback)
-    3. Parse (HTML/YouTube/PDF/DOCX)
-    4. Filter (noise removal + content density + truncation)
-    5. Return ExtractResult
+```mermaid
+flowchart TD
+    A["🔗 URL Input"] --> B{"Content\nType?"}
+    B -->|"HTML"| C["HTTP fetch\n(httpx)"]
+    C --> D{"JS\nrequired?"}
+    D -->|"no"| E["HTML Parser\n→ clean markdown"]
+    D -->|"yes"| F["Playwright\nfallback"]
+    F --> E
+    B -->|"YouTube"| G["Transcript API\n→ timestamped markdown"]
+    B -->|"PDF"| H["PDF Parser\n→ structured markdown"]
+    B -->|"DOCX"| I["DOCX Parser\n→ markdown"]
+    E --> J["✅ LLM-ready\nMarkdown"]
+    G --> J
+    H --> J
+    I --> J
 ```
 
 For HTML pages, if the initial httpx fetch yields fewer than 50 words, MarkGrab automatically retries with Playwright to handle JavaScript-rendered content.

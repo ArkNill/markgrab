@@ -100,13 +100,21 @@ result.metadata     # 추가 메타데이터 (video_id, page_count 등)
 
 ## 동작 원리
 
-```
-markgrab.extract(url)
-    1. 콘텐츠 타입 감지 (URL 패턴)
-    2. 콘텐츠 획득 (httpx 우선, Playwright 폴백)
-    3. 파싱 (HTML/YouTube/PDF/DOCX)
-    4. 필터링 (노이즈 제거 + 본문 밀도 필터 + 길이 제한)
-    5. ExtractResult 반환
+```mermaid
+flowchart TD
+    A["🔗 URL 입력"] --> B{"콘텐츠\n타입?"}
+    B -->|"HTML"| C["HTTP 요청\n(httpx)"]
+    C --> D{"JS\n필요?"}
+    D -->|"아니오"| E["HTML 파서\n→ 정제된 마크다운"]
+    D -->|"예"| F["Playwright\n폴백"]
+    F --> E
+    B -->|"YouTube"| G["자막 API\n→ 타임스탬프 마크다운"]
+    B -->|"PDF"| H["PDF 파서\n→ 구조화된 마크다운"]
+    B -->|"DOCX"| I["DOCX 파서\n→ 마크다운"]
+    E --> J["✅ LLM-ready\n마크다운"]
+    G --> J
+    H --> J
+    I --> J
 ```
 
 HTML 페이지의 경우, httpx로 가져온 결과가 50단어 미만이면 JavaScript 렌더링이 필요한 페이지로 판단하여 Playwright로 자동 재시도합니다.
