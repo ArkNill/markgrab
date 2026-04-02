@@ -1,58 +1,16 @@
 # markgrab
-
 > Universal web content extraction — URL to LLM-ready markdown
-
-## Purpose
-
-Extracts content from web pages, YouTube videos, PDFs, and DOCX files and converts them to clean, LLM-ready markdown. Auto-detects content type from URL and falls back to browser rendering for JavaScript-heavy pages when Playwright is installed.
-
-## Capabilities
-
-- **HTML extraction**: Fetches web pages via httpx, parses with BeautifulSoup, converts to markdown via markdownify
-- **YouTube transcripts**: Extracts video transcripts using youtube-transcript-api
-- **PDF extraction**: Converts PDF documents to markdown via pdfplumber
-- **DOCX extraction**: Converts Word documents to markdown via python-docx
-- **Browser rendering**: Optional Playwright-based rendering for JS-heavy/SPA pages with auto-fallback
-- **Output truncation**: Configurable max character limit (default 50,000)
-- **Proxy support**: Route requests through HTTP proxies
-
-## Installation
-
-```
-pip install markgrab
-pip install markgrab[browser]    # + Playwright
-pip install markgrab[youtube]    # + YouTube transcripts
-pip install markgrab[pdf]        # + PDF support
-pip install markgrab[all]        # everything
-```
-
-## Quick Use
-
-### CLI
-
-```bash
-markgrab https://example.com
-markgrab https://example.com --format json --max-chars 10000
-markgrab https://youtube.com/watch?v=... --format text
-markgrab https://example.com --browser --proxy http://proxy:8080
-```
-
-### Python
-
+- `pip install markgrab` / `markgrab[browser]` / `markgrab[youtube]` / `markgrab[pdf]` / `markgrab[all]`
+- Python >=3.12 | core deps: httpx, beautifulsoup4, markdownify
+- Auto-detects URL type: HTML, YouTube, PDF, DOCX
+- Playwright browser fallback for JS-heavy pages, anti-bot stealth
+- Configurable truncation (default 50k chars), proxy support, language detection
+- Exports: `extract()`, `ExtractResult`
 ```python
 from markgrab import extract
-
 result = await extract("https://example.com", max_chars=50_000)
-print(result.title, result.markdown, result.word_count, result.language)
+print(result.title, result.markdown, result.word_count)
 ```
-
-### MCP
-
-Server: `markgrab` (command: `markgrab-mcp`)
-Tools: `extract_url`, `extract_multiple`
-
-## Links
-
-- Docs: https://github.com/QuartzUnit/markgrab
-- PyPI: https://pypi.org/project/markgrab/
-- Source: https://github.com/QuartzUnit/markgrab
+- CLI: `markgrab URL [--browser] [--format json|text|markdown] [--max-chars N]`
+- MCP: `markgrab-mcp` server with `extract_url`, `extract_multiple` tools
+- [Docs](https://github.com/QuartzUnit/markgrab) | [PyPI](https://pypi.org/project/markgrab/) | [Full API](/llms-full.txt)

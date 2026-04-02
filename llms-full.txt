@@ -1,712 +1,117 @@
 # markgrab
-
 > Universal web content extraction — URL to LLM-ready markdown
 
-## Purpose
+Python >=3.12 | core: httpx>=0.28, beautifulsoup4>=4.13, markdownify>=0.14
+Extras: `[browser]` Playwright | `[youtube]` youtube-transcript-api | `[pdf]` pdfplumber | `[docx]` python-docx | `[mcp]` FastMCP | `[all]`
 
-Extracts content from web pages, YouTube videos, PDFs, and DOCX files and converts them to clean, LLM-ready markdown. Auto-detects content type from URL and falls back to browser rendering for JavaScript-heavy pages when Playwright is installed.
-
-## Capabilities
-
-- **HTML extraction**: Fetches web pages via httpx, parses with BeautifulSoup, converts to markdown via markdownify
-- **YouTube transcripts**: Extracts video transcripts using youtube-transcript-api with timestamped markdown output
-- **PDF extraction**: Converts PDF documents to markdown via pdfplumber with page-level structure
-- **DOCX extraction**: Converts Word documents to markdown via python-docx preserving heading hierarchy
-- **Browser rendering**: Optional Playwright-based rendering for JS-heavy/SPA pages with auto-fallback
-- **Anti-bot stealth**: Playwright stealth scripts (webdriver flag removal, plugin mocking, WebGL spoofing)
-- **Content filtering**: Three-stage noise removal (noise tags, cookie/consent popups, hidden elements), density-based sidebar removal, link-density analysis
-- **Output truncation**: Configurable max character limit (default 50,000) with smart line-boundary truncation
-- **Proxy support**: Route requests through HTTP/SOCKS5 proxies
-- **Language detection**: Character-frequency analysis for ko/ja/zh/en
-- **Locale auto-detection**: Browser locale and timezone from URL TLD (.kr, .jp, .cn)
-- **MCP server**: FastMCP-based server with `extract_url` and `extract_multiple` tools
-- **CLI**: Single-command extraction with markdown/text/JSON output formats
-
-## Installation
-
-```bash
-pip install markgrab                # core (httpx + beautifulsoup4 + markdownify)
-pip install markgrab[browser]       # + Playwright
-pip install markgrab[youtube]       # + YouTube transcripts
-pip install markgrab[pdf]           # + PDF support
-pip install markgrab[docx]          # + DOCX support
-pip install markgrab[mcp]           # + FastMCP server
-pip install markgrab[all]           # everything
-```
-
-Core dependencies: `httpx>=0.28`, `beautifulsoup4>=4.13`, `markdownify>=0.14`.
-Requires Python >= 3.12.
-
-## Quick Use
-
-### CLI
-
-```bash
-markgrab https://example.com
-markgrab https://example.com --format json --max-chars 10000
-markgrab https://youtube.com/watch?v=... --format text
-markgrab https://example.com --browser --proxy http://proxy:8080
-```
-
-### Python
-
+## `extract()`
 ```python
-from markgrab import extract
-
-result = await extract("https://example.com", max_chars=50_000)
-print(result.title, result.markdown, result.word_count, result.language)
+async def extract(url, *, engine=None, max_chars=50_000, use_browser=False,
+                  stealth=False, timeout=30.0, proxy=None, locale=None,
+                  browser_fallback=True) -> ExtractResult
 ```
+| param | type | default | description |
+|-------|------|---------|-------------|
+| url | str | required | target URL |
+| engine | Engine \| None | None | custom engine instance |
+| max_chars | int | 50_000 | max chars for text/markdown output |
+| use_browser | bool | False | force Playwright rendering |
+| stealth | bool | False | anti-bot stealth scripts (browser only) |
+| timeout | float | 30.0 | request timeout seconds |
+| proxy | str \| None | None | proxy URL (http/socks5) |
+| locale | str \| None | None | browser locale, auto-detect from TLD if None |
+| browser_fallback | bool | True | fallback to browser on HTTP error or <50 words |
+URL routing: YouTube -> YouTubeParser | `.pdf` or `application/pdf` -> PdfParser | `.docx` -> DocxParser | else -> HtmlParser
 
-### MCP
-
-Server name: `markgrab` (command: `markgrab-mcp`)
-Tools: `extract_url`, `extract_multiple`
-
-## Architecture
-
-```
-URL
- │
- ├─ _detect_type_from_url() ─────────────────────────┐
- │                                                    │
- │   youtube ───► YouTubeParser.parse()               │
- │   pdf/docx ──► _fetch_bytes() → PdfParser/DocxParser.parse()
- │   html ──────► Engine.fetch() → HtmlParser.parse() │
- │                    │                               │
- │        ┌───────────┴───────────┐                   │
- │    HttpEngine           BrowserEngine              │
- │   (httpx GET)        (Playwright headless)         │
- │        │                    │                      │
- │        └──── fallback ──────┘                      │
- │             (thin content < 50 words               │
- │              or HTTP error)                        │
- │                                                    ▼
- │                                            ExtractResult
- │                                                    │
- │                                          truncate_result()
- │                                                    │
- │                                              final result
- └────────────────────────────────────────────────────┘
-
-Subpackages:
-  markgrab/
-  ├── core.py           # Main orchestrator: extract()
-  ├── result.py         # ExtractResult dataclass
-  ├── utils.py          # detect_language()
-  ├── __main__.py       # CLI entry point
-  ├── mcp_server.py     # FastMCP server
-  ├── engine/
-  │   ├── base.py       # Engine ABC, FetchResult, USER_AGENTS
-  │   ├── http.py       # HttpEngine (httpx)
-  │   └── browser.py    # BrowserEngine (Playwright)
-  ├── parser/
-  │   ├── base.py       # Parser ABC
-  │   ├── html.py       # HtmlParser (BS4 + markdownify)
-  │   ├── youtube.py    # YouTubeParser (youtube-transcript-api)
-  │   ├── pdf.py        # PdfParser (pdfplumber)
-  │   └── docx.py       # DocxParser (python-docx)
-  ├── filter/
-  │   ├── noise.py      # clean_soup() — tag/popup/hidden removal
-  │   ├── density.py    # filter_low_density() — sidebar/nav removal
-  │   └── truncate.py   # truncate_result() — max_chars enforcement
-  └── anti_bot/
-      └── stealth.py    # apply_stealth() — Playwright stealth scripts
-```
-
-HTML parsing pipeline: `clean_soup()` (noise removal) -> `_find_content()` (main content detection via semantic elements and CSS selectors) -> `filter_low_density()` (sidebar/nav removal) -> markdownify conversion.
-
-Content detection priority: semantic element if focused (`<article>`, `<main>`, `[role='main']`) > CSS class/id selectors (30+ patterns) > semantic element if broad > `<body>` fallback.
-
-## API Reference
-
-### Top-level exports
-
-```python
-from markgrab import extract, ExtractResult
-```
-
----
-
-### `extract()`
-
-```python
-async def extract(
-    url: str,
-    *,
-    engine: Engine | None = None,
-    max_chars: int = 50_000,
-    use_browser: bool = False,
-    stealth: bool = False,
-    timeout: float = 30.0,
-    proxy: str | None = None,
-    locale: str | None = None,
-    browser_fallback: bool = True,
-) -> ExtractResult
-```
-
-Main entry point. Routes URL to the appropriate engine and parser based on auto-detected content type.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | `str` | *(required)* | Target URL to extract content from |
-| `engine` | `Engine \| None` | `None` | Custom engine instance. Default: HttpEngine with browser fallback |
-| `max_chars` | `int` | `50_000` | Maximum characters for text and markdown output |
-| `use_browser` | `bool` | `False` | Force Playwright browser rendering (raises ImportError if not installed) |
-| `stealth` | `bool` | `False` | Apply anti-bot stealth scripts when using browser |
-| `timeout` | `float` | `30.0` | Request timeout in seconds |
-| `proxy` | `str \| None` | `None` | Proxy URL (e.g., `"http://proxy:8080"`, `"socks5://proxy:1080"`) |
-| `locale` | `str \| None` | `None` | Browser locale. Default: auto-detect from URL TLD (e.g., `.kr` -> `ko-KR`) |
-| `browser_fallback` | `bool` | `True` | Auto-fallback to browser on HTTP error or thin content (< 50 words). Set `False` for HTTP-only extraction |
-
-**Returns:** `ExtractResult`
-
-**Content type routing:**
-- YouTube URLs (`youtube.com`, `youtu.be`) -> `YouTubeParser`
-- `.pdf` URLs -> `PdfParser`
-- `.docx` URLs -> `DocxParser`
-- Everything else -> `HtmlParser` (with optional browser fallback)
-- URLs returning `application/pdf` Content-Type header are also routed to `PdfParser`
-
----
-
-### `ExtractResult`
-
+## `ExtractResult`
 ```python
 @dataclass
 class ExtractResult:
-    title: str
-    text: str
-    markdown: str
-    word_count: int
-    language: str
-    content_type: str
-    source_url: str
-    metadata: dict = field(default_factory=dict)
+    title: str; text: str; markdown: str; word_count: int
+    language: str; content_type: str; source_url: str; metadata: dict
 ```
-
-**Fields:**
-
-| Field | Type | Description |
+| field | type | description |
 |-------|------|-------------|
-| `title` | `str` | Page title (from og:title, `<title>`, `<h1>`, or document properties) |
-| `text` | `str` | Plain text content (newline-separated, whitespace-normalized) |
-| `markdown` | `str` | Markdown-formatted content (ATX headings, `-` bullets) |
-| `word_count` | `int` | Number of whitespace-delimited words in `text` |
-| `language` | `str` | Detected language code: `"en"`, `"ko"`, `"ja"`, or `"zh"` |
-| `content_type` | `str` | Content category: `"article"`, `"video"`, `"pdf"`, or `"document"` |
-| `source_url` | `str` | Final URL after redirects |
-| `metadata` | `dict` | Extra metadata (varies by content type, see below) |
+| title | str | from og:title > `<title>` > `<h1>` > doc properties |
+| text | str | plain text, whitespace-normalized |
+| markdown | str | ATX headings, `-` bullets |
+| word_count | int | whitespace-delimited word count |
+| language | str | `en` \| `ko` \| `ja` \| `zh` |
+| content_type | str | `article` \| `video` \| `pdf` \| `document` |
+| source_url | str | final URL after redirects |
+| metadata | dict | varies by content_type (see below) |
+Metadata keys — article: `url`, `domain`, `description`, `image`, `author`, `published` | video: `video_id`, `transcript_language` | pdf: `page_count`, `author`, `subject`, `created` | document: `author`, `created`, `modified`, `subject`
 
-**Metadata by content type:**
+## Engines
+`Engine` (ABC): `.fetch(url, *, timeout=30.0) -> FetchResult`
+`FetchResult`: dataclass with `html: str`, `status_code: int`, `content_type: str`, `final_url: str`
+`HttpEngine(*, proxy=None)` — httpx GET, randomized UA (3 Chrome 131 strings), follows redirects, raises on non-2xx
+`BrowserEngine(*, proxy=None, stealth=False, locale=None)` — headless Chromium via Playwright (lazy import), viewport 1920x1080, waits domcontentloaded + best-effort networkidle (max 8s), CloudFlare retry up to 3x with 2s delay if HTML <20KB
+Locale auto-detect: `.kr`->ko-KR/Asia/Seoul | `.jp`->ja-JP/Asia/Tokyo | `.cn`->zh-CN/Asia/Shanghai | default en-US/America/New_York
 
-- **article** (HTML): `url`, `domain`, `description` (og:description), `image` (og:image), `author`, `published`
-- **video** (YouTube): `video_id`, `transcript_language`
-- **pdf**: `page_count`, `author`, `subject`, `created`
-- **document** (DOCX): `author`, `created`, `modified`, `subject`
+## Parsers
+`Parser` (ABC): `.parse(html, url) -> ExtractResult`
+`HtmlParser.parse(html, url)` — BS4+markdownify. Pipeline: extract title/meta -> clean_soup() -> find main content (semantic elements > 30+ CSS selectors > body) -> filter_low_density() -> markdownify -> detect_language
+`YouTubeParser.parse(video_id, url, title="")` — transcript with timestamps `[MM:SS]`. Lang priority: en, ko, ja, zh-Hans, zh-Hant, de, fr, es, pt, then any available
+`PdfParser.parse(data: bytes, url)` — pdfplumber, `## Page N` headings for multi-page
+`DocxParser.parse(data: bytes, url)` — python-docx, Heading 1-3 -> `#`-`###`, other headings -> `####`, list styles -> `- ` prefix
 
----
+## Filters
+`clean_soup(soup) -> None` — in-place removal: script/style/noscript/svg/iframe tags, cookie/consent/popup/modal elements, hidden elements (aria-hidden, display:none)
+`filter_low_density(content) -> None` — in-place 3-pass: remove aside/nav tags -> remove sidebar class/id patterns (sidebar, related, widget, toc, breadcrumb, social, share, comment, advert, promo, recommend, popular, trending, signup, newsletter, subscribe) -> remove block children with link density >50%
+`truncate_result(result, *, max_chars=50_000) -> ExtractResult` — truncate text/markdown at last newline before limit, append `[truncated]`
 
-### Engine classes
+## Anti-bot
+`apply_stealth(context) -> None` — Playwright context init_script: removes navigator.webdriver, sets realistic languages, mocks Chrome plugins (PDF Plugin/Viewer, Native Client), mocks permissions.query, adds window.chrome runtime, spoofs WebGL to Intel Iris
 
-#### `Engine` (abstract base)
+## Utilities
+`detect_language(text) -> str` — char frequency on first 2000 chars. Returns `ko` \| `ja` \| `zh` \| `en` (default). Threshold: >50 chars or >10% of sample
 
-```python
-class Engine(ABC):
-    def __init__(self, *, proxy: str | None = None): ...
+## MCP Tools
+`extract_url(url, max_chars=50_000, use_browser=False, output_format="markdown") -> str` — single URL, format: `markdown` \| `text` \| `json`
+`extract_multiple(urls: list[str], max_chars=30_000) -> str` — sequential batch, returns JSON array of `{url, title, word_count, language, markdown}` or `{url, error}`
+Server command: `markgrab-mcp`
 
-    @abstractmethod
-    async def fetch(self, url: str, *, timeout: float = 30.0) -> FetchResult: ...
+## CLI
 ```
-
-Base class for content fetching engines. Subclass to create custom engines.
-
----
-
-#### `FetchResult`
-
-```python
-@dataclass
-class FetchResult:
-    html: str
-    status_code: int
-    content_type: str
-    final_url: str
+markgrab URL [--max-chars N] [--browser] [--timeout SEC] [--proxy URL] [--format markdown|text|json]
 ```
-
-**Fields:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `html` | `str` | Raw HTML content |
-| `status_code` | `int` | HTTP status code |
-| `content_type` | `str` | Content-Type header value |
-| `final_url` | `str` | Final URL after redirects |
-
----
-
-#### `HttpEngine`
-
-```python
-class HttpEngine(Engine):
-    def __init__(self, *, proxy: str | None = None): ...
-    async def fetch(self, url: str, *, timeout: float = 30.0) -> FetchResult: ...
-```
-
-Lightweight HTTP engine using httpx. Sends randomized User-Agent from a pool of 3 Chrome UA strings. Follows redirects. Raises `httpx.HTTPStatusError` on non-2xx responses.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `proxy` | `str \| None` | `None` | Proxy URL |
-
----
-
-#### `BrowserEngine`
-
-```python
-class BrowserEngine(Engine):
-    def __init__(
-        self,
-        *,
-        proxy: str | None = None,
-        stealth: bool = False,
-        locale: str | None = None,
-    ): ...
-
-    async def fetch(self, url: str, *, timeout: float = 30.0) -> FetchResult: ...
-```
-
-Playwright-based headless Chromium engine for JS-heavy and bot-protected sites. Requires `pip install markgrab[browser]`. Playwright is imported lazily.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `proxy` | `str \| None` | `None` | Proxy URL |
-| `stealth` | `bool` | `False` | Apply anti-bot stealth scripts |
-| `locale` | `str \| None` | `None` | Browser locale. `None` = auto-detect from URL TLD |
-
-**Behavior:**
-- Viewport: 1920x1080
-- Waits for `domcontentloaded`, then best-effort `networkidle` (max 8s or half timeout)
-- CloudFlare/bot challenge retry: if page HTML < 20KB, retries up to 3 times with 2s delay
-- Locale auto-detection: `.kr` -> `ko-KR`, `.jp` -> `ja-JP`, `.cn` -> `zh-CN`, default `en-US`
-- Timezone set from locale: `ko-KR` -> `Asia/Seoul`, `ja-JP` -> `Asia/Tokyo`, `zh-CN` -> `Asia/Shanghai`, `en-US` -> `America/New_York`
-
----
-
-### Parser classes
-
-#### `Parser` (abstract base)
-
-```python
-class Parser(ABC):
-    @abstractmethod
-    def parse(self, html: str, url: str) -> ExtractResult: ...
-```
-
----
-
-#### `HtmlParser`
-
-```python
-class HtmlParser(Parser):
-    def parse(self, html: str, url: str) -> ExtractResult: ...
-```
-
-Parses HTML into `ExtractResult` using BeautifulSoup + markdownify.
-
-**Pipeline:**
-1. Extract title (priority: `og:title` > `<title>` > first `<h1>`)
-2. Extract metadata (og:description, og:image, author, published date)
-3. Remove noise elements via `clean_soup()`
-4. Find main content area via semantic elements and 30+ CSS selectors
-5. Remove low-density sidebars via `filter_low_density()`
-6. Convert to markdown (ATX headings, `-` bullets) and plain text
-7. Detect language
-
-**Content detection CSS selectors** (tried in order after semantic elements):
-`#contentBody`, `#powerbbsContent`, `#article-body`, `#mArticle`, `#postContent`, `#post-content`, `.view-content`, `.post-content`, `.article-content`, `.content-wrap`, `.entry-content`, `.article-body`, `.post-body`, `.board-content`, `.detail-content`, `.story-body`, `.article__body`, `.post__content`
-
----
-
-#### `YouTubeParser`
-
-```python
-class YouTubeParser:
-    def parse(self, video_id: str, url: str, title: str = "") -> ExtractResult: ...
-```
-
-Extracts YouTube video transcripts with timestamps.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `video_id` | `str` | *(required)* | YouTube video ID (11 characters) |
-| `url` | `str` | *(required)* | Original YouTube URL |
-| `title` | `str` | `""` | Video title (fetched via oEmbed if not provided) |
-
-**Language preference order:** `en`, `ko`, `ja`, `zh-Hans`, `zh-Hant`, `de`, `fr`, `es`, `pt`. Falls back to any available transcript.
-
-**Markdown output format:**
-```
-# Video Title
-
-[00:00] First transcript segment
-[00:15] Second transcript segment
-```
-
----
-
-#### `PdfParser`
-
-```python
-class PdfParser:
-    def parse(self, data: bytes, url: str) -> ExtractResult: ...
-```
-
-Extracts text from PDF bytes using pdfplumber.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `data` | `bytes` | *(required)* | Raw PDF bytes |
-| `url` | `str` | *(required)* | Source URL |
-
-**Markdown output format:** Title from PDF metadata, then `## Page N` headings for multi-page documents.
-
----
-
-#### `DocxParser`
-
-```python
-class DocxParser:
-    def parse(self, data: bytes, url: str) -> ExtractResult: ...
-```
-
-Extracts text from DOCX bytes using python-docx.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `data` | `bytes` | *(required)* | Raw DOCX bytes |
-| `url` | `str` | *(required)* | Source URL |
-
-**Heading mapping:** Word "Heading 1" -> `#`, "Heading 2" -> `##`, "Heading 3" -> `###`, other headings -> `####`. List styles -> `- ` prefix.
-
----
-
-### Filter functions
-
-#### `clean_soup()`
-
-```python
-def clean_soup(soup: BeautifulSoup) -> None
-```
-
-Remove noise elements from BeautifulSoup object in-place.
-
-**Removes:**
-- Tags: `script`, `style`, `noscript`, `svg`, `iframe`
-- Cookie/consent/popup/modal elements (by class and id patterns)
-- Hidden elements (`aria-hidden="true"`, `display: none`)
-
----
-
-#### `filter_low_density()`
-
-```python
-def filter_low_density(content: Tag) -> None
-```
-
-Remove low-density sidebar/navigation blocks from content area in-place.
-
-**Three-pass approach:**
-1. Remove `<aside>` and `<nav>` tags (semantic non-content)
-2. Remove elements matching sidebar class/id patterns (sidebar, related, widget, toc, breadcrumb, social, share, comment, advert, promo, recommend, popular, trending, signup, newsletter, subscribe)
-3. Remove direct block children (`div`, `section`, `ul`, `ol`, `table`, `form`, `dl`) with link density > 50%
-
----
-
-#### `truncate_result()`
-
-```python
-def truncate_result(result: ExtractResult, *, max_chars: int = 50_000) -> ExtractResult
-```
-
-Truncate text and markdown fields to `max_chars`. Breaks at the last newline before the limit and appends `[truncated]`. Returns the original result unchanged if no truncation needed.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `result` | `ExtractResult` | *(required)* | Result to truncate |
-| `max_chars` | `int` | `50_000` | Maximum character count for text and markdown fields |
-
----
-
-### Anti-bot
-
-#### `apply_stealth()`
-
-```python
-async def apply_stealth(context) -> None
-```
-
-Apply stealth settings to a Playwright browser context via `add_init_script`.
-
-**Stealth measures:**
-- Removes `navigator.webdriver` flag
-- Sets realistic `navigator.languages` (`['en-US', 'en', 'ko']`)
-- Mocks Chrome plugins (PDF Plugin, PDF Viewer, Native Client)
-- Mocks `navigator.permissions.query` for notifications
-- Adds `window.chrome` runtime mock
-- Spoofs WebGL vendor/renderer to Intel Iris
-
----
-
-### Utility functions
-
-#### `detect_language()`
-
-```python
-def detect_language(text: str) -> str
-```
-
-Detect language from text using character frequency analysis on the first 2000 characters.
-
-**Returns:** `"ko"` (Korean), `"ja"` (Japanese), `"zh"` (Chinese), or `"en"` (default).
-
-**Detection threshold:** > 50 characters of the target script, or > 10% of the sample.
-
----
-
-### MCP Tools
-
-#### `extract_url`
-
-```python
-@mcp.tool()
-async def extract_url(
-    url: str,
-    max_chars: int = 50_000,
-    use_browser: bool = False,
-    output_format: str = "markdown",
-) -> str
-```
-
-MCP tool: extract content from a single URL.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | `str` | *(required)* | Target URL |
-| `max_chars` | `int` | `50_000` | Maximum characters in output |
-| `use_browser` | `bool` | `False` | Force Playwright browser rendering |
-| `output_format` | `str` | `"markdown"` | `"markdown"`, `"text"`, or `"json"` |
-
-**Returns:** String (markdown, plain text, or JSON depending on `output_format`).
-
----
-
-#### `extract_multiple`
-
-```python
-@mcp.tool()
-async def extract_multiple(
-    urls: list[str],
-    max_chars: int = 30_000,
-) -> str
-```
-
-MCP tool: extract content from multiple URLs sequentially.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `urls` | `list[str]` | *(required)* | List of URLs to extract |
-| `max_chars` | `int` | `30_000` | Maximum characters per URL |
-
-**Returns:** JSON array string. Each element: `{"url", "title", "word_count", "language", "markdown"}` on success, or `{"url", "error"}` on failure.
-
----
-
-### CLI
-
-```
-markgrab [-h] [--max-chars MAX_CHARS] [--browser] [--timeout TIMEOUT]
-         [--proxy PROXY] [--format {markdown,text,json}]
-         url
-```
-
-| Argument | Description |
-|----------|-------------|
-| `url` | URL to extract content from |
-| `--max-chars` | Max output characters (default: 50000) |
-| `--browser` | Force Playwright browser rendering |
-| `--timeout` | Request timeout in seconds (default: 30) |
-| `--proxy` | Proxy URL (e.g., `http://proxy:8080`) |
-| `--format`, `-f` | Output format: `markdown` (default), `text`, `json` |
-
-**Output formats:**
-- `markdown`: Prints `# Title` header with HTML comment metadata, then markdown body
-- `text`: Prints `Title:` / `Words:` / `Language:` / `Type:` header, then plain text
-- `json`: Prints JSON object with all `ExtractResult` fields
-
----
-
-### Constants
-
-```python
-# markgrab.engine.base
-USER_AGENTS: list[str]  # 3 Chrome 131 User-Agent strings (Linux, Windows, macOS)
-
-# markgrab.core
-_MIN_WORD_COUNT = 50  # Below this, content triggers browser fallback
-
-# markgrab.filter.density
-_LINK_DENSITY_THRESHOLD = 0.5  # Link text ratio above this = navigation
-_MIN_BLOCK_TEXT = 25            # Minimum text length for density analysis
-
-# markgrab.parser.youtube
-_LANG_PRIORITY = ("en", "ko", "ja", "zh-Hans", "zh-Hant", "de", "fr", "es", "pt")
-```
+| arg | default | description |
+|-----|---------|-------------|
+| url | required | target URL |
+| --max-chars | 50000 | max output chars |
+| --browser | off | force Playwright |
+| --timeout | 30 | request timeout seconds |
+| --proxy | none | proxy URL |
+| --format, -f | markdown | output format |
+Output: markdown prints `# Title` + HTML comment meta + body | text prints Title/Words/Language/Type header + body | json prints full ExtractResult
+
+## Constants
+`USER_AGENTS: list[str]` — 3 Chrome 131 UAs (Linux/Windows/macOS)
+`_MIN_WORD_COUNT = 50` — below this triggers browser fallback
+`_LINK_DENSITY_THRESHOLD = 0.5` — link ratio above = navigation
+`_MIN_BLOCK_TEXT = 25` — minimum text length for density analysis
+`_LANG_PRIORITY = ("en","ko","ja","zh-Hans","zh-Hant","de","fr","es","pt")`
 
 ## Examples
-
-### 1. Basic HTML extraction
-
 ```python
-import asyncio
+# Basic extraction
 from markgrab import extract
-
-async def main():
-    result = await extract("https://example.com/blog/post")
-    print(f"Title: {result.title}")
-    print(f"Language: {result.language}")
-    print(f"Words: {result.word_count}")
-    print(f"Domain: {result.metadata.get('domain')}")
-    print(result.markdown)
-
-asyncio.run(main())
+result = await extract("https://example.com/blog/post")
+print(result.title, result.language, result.word_count, result.markdown)
 ```
-
-### 2. YouTube transcript extraction
-
 ```python
-import asyncio
+# Browser + stealth + proxy
 from markgrab import extract
-
-async def main():
-    result = await extract("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-    print(f"Title: {result.title}")
-    print(f"Transcript language: {result.metadata['transcript_language']}")
-    print(f"Content type: {result.content_type}")  # "video"
-    # Markdown includes timestamps: [00:00] text, [00:15] text, ...
-    print(result.markdown[:500])
-
-asyncio.run(main())
+result = await extract("https://protected-site.com", use_browser=True,
+                       stealth=True, timeout=60.0, max_chars=100_000)
 ```
-
-### 3. Browser rendering with stealth for bot-protected sites
-
 ```python
-import asyncio
-from markgrab import extract
-
-async def main():
-    result = await extract(
-        "https://protected-site.example.com/article",
-        use_browser=True,
-        stealth=True,
-        timeout=60.0,
-        max_chars=100_000,
-    )
-    print(result.markdown)
-
-asyncio.run(main())
-```
-
-### 4. Custom engine with proxy
-
-```python
-import asyncio
-from markgrab import extract
-from markgrab.engine import HttpEngine
-
-async def main():
-    engine = HttpEngine(proxy="socks5://127.0.0.1:1080")
-    result = await extract(
-        "https://example.com",
-        engine=engine,
-        browser_fallback=False,  # HTTP-only, no browser fallback
-    )
-    print(result.title, result.word_count)
-
-asyncio.run(main())
-```
-
-### 5. PDF extraction
-
-```python
-import asyncio
-from markgrab import extract
-
-async def main():
-    result = await extract("https://example.com/report.pdf")
-    print(f"Title: {result.title}")
-    print(f"Pages: {result.metadata.get('page_count')}")
-    print(f"Author: {result.metadata.get('author', 'unknown')}")
-    print(result.markdown[:1000])
-
-asyncio.run(main())
-```
-
-### 6. Batch extraction via MCP server
-
-Configure in Claude Code's MCP settings:
-
-```json
-{
-  "mcpServers": {
-    "markgrab": {
-      "command": "markgrab-mcp"
-    }
-  }
-}
-```
-
-The server exposes two tools:
-- `extract_url`: Single URL extraction with format options
-- `extract_multiple`: Batch extraction returning JSON array
-
-### 7. Using parsers directly for local content
-
-```python
+# Direct parser usage for local content
 from markgrab.parser import HtmlParser, PdfParser
-
-# Parse local HTML string
-parser = HtmlParser()
-result = parser.parse("<html><body><h1>Hello</h1><p>World</p></body></html>", url="local://")
-print(result.markdown)  # "# Hello\n\nWorld"
-
-# Parse PDF bytes
-with open("document.pdf", "rb") as f:
-    pdf_result = PdfParser().parse(f.read(), url="file://document.pdf")
-print(pdf_result.title, pdf_result.metadata["page_count"])
+result = HtmlParser().parse("<html><body><h1>Hi</h1><p>World</p></body></html>", "local://")
+with open("doc.pdf","rb") as f:
+    pdf = PdfParser().parse(f.read(), "file://doc.pdf")
 ```
 
-## Links
-
-- Docs: https://github.com/QuartzUnit/markgrab
-- PyPI: https://pypi.org/project/markgrab/
-- Source: https://github.com/QuartzUnit/markgrab
-- Issues: https://github.com/QuartzUnit/markgrab/issues
+[Docs](https://github.com/QuartzUnit/markgrab) | [PyPI](https://pypi.org/project/markgrab/) | [Issues](https://github.com/QuartzUnit/markgrab/issues)
