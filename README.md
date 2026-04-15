@@ -156,3 +156,8 @@ Built with [httpx](https://github.com/encode/httpx), [BeautifulSoup](https://www
 [MIT](LICENSE)
 
 <!-- mcp-name: io.github.ArkNill/markgrab -->
+
+
+---
+
+<sub>Part of the [QuartzUnit](https://github.com/QuartzUnit) ecosystem — composable Python libraries for data collection, extraction, search, and AI agent safety.</sub>

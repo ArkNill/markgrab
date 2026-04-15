@@ -27,6 +27,8 @@ dependencies = [
 Homepage = "https://github.com/QuartzUnit/markgrab"
 Repository = "https://github.com/QuartzUnit/markgrab"
 Issues = "https://github.com/QuartzUnit/markgrab/issues"
+Documentation = "https://github.com/QuartzUnit/markgrab#readme"
+Changelog = "https://github.com/QuartzUnit/markgrab/releases"
 
 [project.optional-dependencies]
 browser = ["playwright>=1.49"]
