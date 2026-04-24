@@ -1,11 +1,10 @@
 """MarkGrab MCP server — expose extract as an MCP tool for Claude Code."""
 
-import asyncio
 import json
 
 from fastmcp import FastMCP
 
-from markgrab.core import extract
+from markgrab.core import extract, extract_batch
 
 mcp = FastMCP(
     "markgrab",
@@ -69,19 +68,20 @@ async def extract_multiple(
         urls: List of URLs to extract content from.
         max_chars: Maximum characters per URL (default: 30000).
     """
+    batch_results = await extract_batch(urls, max_chars=max_chars, max_concurrent=4)
+
     results = []
-    for url in urls:
-        try:
-            result = await extract(url, max_chars=max_chars)
+    for url, res in zip(urls, batch_results, strict=True):
+        if isinstance(res, Exception):
+            results.append({"url": url, "error": str(res)})
+        else:
             results.append({
                 "url": url,
-                "title": result.title,
-                "word_count": result.word_count,
-                "language": result.language,
-                "markdown": result.markdown,
+                "title": res.title,
+                "word_count": res.word_count,
+                "language": res.language,
+                "markdown": res.markdown,
             })
-        except Exception as e:
-            results.append({"url": url, "error": str(e)})
 
     return json.dumps(results, ensure_ascii=False)
 

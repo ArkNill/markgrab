@@ -1,5 +1,6 @@
 """Main orchestrator — route URL to appropriate engine and parser."""
 
+import asyncio
 import logging
 import random
 from urllib.parse import urlparse
@@ -206,3 +207,87 @@ async def extract(
             pass  # Keep original result
 
     return truncate_result(result, max_chars=max_chars)
+
+
+async def extract_batch(
+    urls: list[str],
+    *,
+    max_concurrent: int = 6,
+    domain_delay: float = 1.0,
+    per_url_timeout: float | None = None,
+    max_chars: int = 50_000,
+    browser_fallback: bool = True,
+    timeout: float = 30.0,
+    proxy: str | None = None,
+    stealth: bool = False,
+    locale: str | None = None,
+) -> list[ExtractResult | Exception]:
+    """Extract content from multiple URLs concurrently.
+
+    Uses asyncio concurrency (no threads) — browser fallback is safe.
+    ThreadPoolExecutor causes Playwright deadlocks; this function avoids
+    threads entirely by using asyncio.Semaphore + asyncio.gather.
+
+    Args:
+        urls: List of URLs to extract.
+        max_concurrent: Maximum simultaneous extractions (default: 6).
+        domain_delay: Minimum seconds between requests to the same domain (default: 1.0).
+        per_url_timeout: Hard timeout per URL in seconds (None = no extra limit).
+        max_chars: Maximum characters per result.
+        browser_fallback: Auto-fallback to browser on HTTP error or thin content.
+        timeout: Per-request soft timeout passed to extract().
+        proxy: Proxy URL.
+        stealth: Apply anti-bot stealth scripts.
+        locale: Browser locale override.
+
+    Returns:
+        List parallel to *urls*: each element is an ExtractResult on success
+        or an Exception on failure.
+    """
+    if not urls:
+        return []
+
+    sem = asyncio.Semaphore(max_concurrent)
+
+    # Per-domain locks for rate limiting
+    domains = {urlparse(u).hostname or "" for u in urls}
+    domain_locks: dict[str, asyncio.Lock] = {d: asyncio.Lock() for d in domains}
+    domain_last: dict[str, float] = {}
+
+    async def _wait_domain(url: str) -> None:
+        if domain_delay <= 0:
+            return
+        domain = urlparse(url).hostname or ""
+        lock = domain_locks.get(domain)
+        if lock is None:
+            return
+        async with lock:
+            import time as _time
+
+            last = domain_last.get(domain, 0.0)
+            now = _time.monotonic()
+            wait = domain_delay - (now - last)
+            if wait > 0:
+                await asyncio.sleep(wait)
+            domain_last[domain] = _time.monotonic()
+
+    async def _extract_one(url: str) -> ExtractResult:
+        await _wait_domain(url)
+        async with sem:
+            coro = extract(
+                url,
+                max_chars=max_chars,
+                browser_fallback=browser_fallback,
+                timeout=timeout,
+                proxy=proxy,
+                stealth=stealth,
+                locale=locale,
+            )
+            if per_url_timeout is not None:
+                return await asyncio.wait_for(coro, timeout=per_url_timeout)
+            return await coro
+
+    return await asyncio.gather(
+        *[_extract_one(url) for url in urls],
+        return_exceptions=True,
+    )
